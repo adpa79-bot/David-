@@ -161,6 +161,8 @@ object Ic {
     val refresh = icon("refresh", "M20 12a8 8 0 1 1-2.3-5.7 M20 4v4h-4", stroke = 2f)
     val external = icon("external", "M14 4h6v6 M20 4l-9 9 M18 14v6H4V6h6")
     val upload = icon("upload", "M12 16V4 M7 9l5-5 5 5 M4 20h16", stroke = 2f)
+    val expand = icon("expand", "M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5")
+    val collapse = icon("collapse", "M9 4v5H4 M15 4v5h5 M9 20v-5H4 M15 20v-5h5")
     val zoomReset = icon("zoomReset", "M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5")
     val logo = icon("logo", "M6 4v16 M4 8h4v7H4z M12 3v14 M10 6h4v6h-4z M18 7v14 M16 10h4v7h-4z", stroke = 2f)
 }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -52,11 +53,37 @@ import com.mitrading.app.domain.Ind
 @Composable
 fun MainScreen(vm: AppViewModel) {
     Row(Modifier.fillMaxSize()) {
-        FavoritesPanel(vm, Modifier.width(290.dp).fillMaxHeight())
-        Box(Modifier.width(1.dp).fillMaxHeight().background(C.border))
-        ChartPanel(vm, Modifier.weight(1f).fillMaxHeight())
-        Box(Modifier.width(1.dp).fillMaxHeight().background(C.border))
-        DetailPanel(vm, Modifier.width(300.dp).fillMaxHeight())
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // En pantallas anchas: favoritos | gráfico | análisis.
+            // En tablets más estrechas: un solo panel lateral con pestañas, para dar más sitio al gráfico.
+            val wide = maxWidth >= 1250.dp
+            var leftTab by remember { mutableStateOf(0) }
+            Row(Modifier.fillMaxSize()) {
+                if (!vm.chartFull) {
+                    if (wide) {
+                        FavoritesPanel(vm, Modifier.width(290.dp).fillMaxHeight())
+                    } else {
+                        Column(Modifier.width(270.dp).fillMaxHeight()) {
+                            Row(
+                                Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Pill("Favoritos", leftTab == 0, { leftTab = 0 }, Modifier.weight(1f))
+                                Pill("Análisis", leftTab == 1, { leftTab = 1 }, Modifier.weight(1f))
+                            }
+                            if (leftTab == 0) FavoritesPanel(vm, Modifier.weight(1f).fillMaxWidth())
+                            else DetailPanel(vm, Modifier.weight(1f).fillMaxWidth())
+                        }
+                    }
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(C.border))
+                }
+                ChartPanel(vm, Modifier.weight(1f).fillMaxHeight())
+                if (wide && !vm.chartFull) {
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(C.border))
+                    DetailPanel(vm, Modifier.width(300.dp).fillMaxHeight())
+                }
+            }
+        }
     }
 }
 
@@ -179,51 +206,62 @@ private fun ChartPanel(vm: AppViewModel, modifier: Modifier) {
 private fun ChartPanelContent(vm: AppViewModel, inst: Instrument, modifier: Modifier) {
     val context = LocalContext.current
     val chartState = remember(inst.symbol, vm.tf) { ChartViewState() }
-    Column(modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Column(modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
         val q = vm.quotes[inst.symbol]
         // Cabecera
+        // Cabecera compacta: siempre en una sola fila para no robar altura al gráfico.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(inst.name, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = C.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    Spacer(Modifier.width(10.dp))
-                    Muted("${inst.symbol} · ${inst.type.label}${if (inst.exchange.isNotBlank()) " · " + inst.exchange else ""}")
-                }
-                if (q != null) {
-                    val up = q.change >= 0
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(fmtPrice(q.price) + curSuffix(q.currency), fontFamily = Mono, fontWeight = FontWeight.SemiBold, fontSize = 26.sp, color = C.text)
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            (if (up) "▲ +" else "▼ ") + fmtPrice(q.change) + " (" + pct(q.changePct) + ")",
-                            fontFamily = Mono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
-                            color = if (up) C.up else C.down, modifier = Modifier.padding(bottom = 3.dp)
-                        )
-                    }
-                }
+            Text(
+                inst.name, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = C.text,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
+            )
+            Spacer(Modifier.width(10.dp))
+            if (q != null) {
+                val up = q.change >= 0
+                Text(
+                    fmtPrice(q.price) + curSuffix(q.currency), fontFamily = Mono, fontWeight = FontWeight.SemiBold,
+                    fontSize = 20.sp, color = C.text, maxLines = 1, softWrap = false
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    (if (up) "▲ " else "▼ ") + pct(q.changePct),
+                    fontFamily = Mono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                    color = if (up) C.up else C.down, maxLines = 1, softWrap = false
+                )
             }
+            Spacer(Modifier.weight(1f))
             val fav = vm.isFavorite(inst.symbol)
             IconButton(onClick = { vm.toggleFavorite(inst) }) {
                 Icon(if (fav) Ic.star else Ic.starOutline, contentDescription = "Favorito", tint = C.star)
             }
             var brokerMenu by remember { mutableStateOf(false) }
             Box {
-                SecondaryButton("Operar", { brokerMenu = true }, icon = Ic.external)
+                IconButton(onClick = { brokerMenu = true }) {
+                    Icon(Ic.external, contentDescription = "Operar en el broker", tint = C.text2)
+                }
                 DropdownMenu(expanded = brokerMenu, onDismissRequest = { brokerMenu = false }) {
                     DropdownMenuItem(text = { Text("Abrir XTB") }, onClick = { brokerMenu = false; vm.openBroker(context, "XTB") })
                     DropdownMenuItem(text = { Text("Abrir Trade Republic") }, onClick = { brokerMenu = false; vm.openBroker(context, "Trade Republic") })
                 }
             }
-            Spacer(Modifier.width(8.dp))
-            PrimaryButton("Crear alerta", {
+            IconButton(onClick = {
                 vm.alertPresetSymbol = inst.symbol
                 vm.screen = Screen.ALERTS
-            }, icon = Ic.bell)
+            }) {
+                Icon(Ic.bell, contentDescription = "Crear alerta", tint = C.accent)
+            }
+            IconButton(onClick = { vm.chartFull = !vm.chartFull }) {
+                Icon(
+                    if (vm.chartFull) Ic.collapse else Ic.expand,
+                    contentDescription = if (vm.chartFull) "Salir de pantalla completa" else "Gráfico a pantalla completa",
+                    tint = C.text2
+                )
+            }
         }
 
         // Barra de herramientas
         Row(
-            Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()),
+            Modifier.padding(top = 6.dp).horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -235,7 +273,7 @@ private fun ChartPanelContent(vm: AppViewModel, inst: Instrument, modifier: Modi
             Pill("RSI 14", vm.osc == Osc.RSI, { vm.osc = Osc.RSI })
             Pill("Estocástico", vm.osc == Osc.STOCH, { vm.osc = Osc.STOCH })
             IconButton(onClick = { chartState.reset() }) {
-                Icon(Ic.zoomReset, contentDescription = "Restablecer zoom", tint = C.muted, modifier = Modifier.size(20.dp))
+                Icon(Ic.refresh, contentDescription = "Restablecer zoom", tint = C.muted, modifier = Modifier.size(20.dp))
             }
         }
 
@@ -246,24 +284,30 @@ private fun ChartPanelContent(vm: AppViewModel, inst: Instrument, modifier: Modi
         val ma200 = Ind.sma(closes, 200).lastOrNull()
         val rsi = Ind.rsi(closes).lastOrNull()
         val stoch = if (vm.candles.isNotEmpty()) Ind.stochastic(vm.candles).first.lastOrNull() else null
-        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Muted("Velas ${vm.tf.desc}")
-            if (vm.showMa) {
-                Text("MM20 ${ma20?.let { fmtPrice(it) } ?: "—"}", color = C.ma20, fontFamily = Mono, fontSize = 11.sp)
-                Text("MM50 ${ma50?.let { fmtPrice(it) } ?: "—"}", color = C.ma50, fontFamily = Mono, fontSize = 11.sp)
-                Text("MM200 ${ma200?.let { fmtPrice(it) } ?: "—"}", color = C.ma200, fontFamily = Mono, fontSize = 11.sp)
+        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Velas ${vm.tf.desc}", color = C.muted, fontSize = 11.sp, maxLines = 1, softWrap = false)
+                if (vm.showMa) {
+                    Text("MM20 ${ma20?.let { fmtPrice(it) } ?: "—"}", color = C.ma20, fontFamily = Mono, fontSize = 11.sp, softWrap = false)
+                    Text("MM50 ${ma50?.let { fmtPrice(it) } ?: "—"}", color = C.ma50, fontFamily = Mono, fontSize = 11.sp, softWrap = false)
+                    Text("MM200 ${ma200?.let { fmtPrice(it) } ?: "—"}", color = C.ma200, fontFamily = Mono, fontSize = 11.sp, softWrap = false)
+                }
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
             val oscVal = if (vm.osc == Osc.RSI) rsi else stoch
             val st = if (vm.osc == Osc.RSI) Ind.oscState(oscVal, 70.0, 30.0) else Ind.oscState(oscVal, 80.0, 20.0)
             val col = when (st) { "Sobrecompra" -> C.res; "Sobreventa" -> C.sup; else -> C.muted }
             Text(
                 "${if (vm.osc == Osc.RSI) "RSI" else "Estocástico"} ${oscVal?.let { fmt(it, 1) } ?: "—"} · $st",
-                color = col, fontFamily = Mono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp
+                color = col, fontFamily = Mono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
+                maxLines = 1, softWrap = false
             )
         }
 
-        Box(Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp)) {
+        Box(Modifier.weight(1f).fillMaxWidth().padding(top = 6.dp)) {
             when {
                 vm.chartLoading && vm.candles.isEmpty() ->
                     CircularProgressIndicator(Modifier.align(Alignment.Center), color = C.accent)
@@ -275,9 +319,11 @@ private fun ChartPanelContent(vm: AppViewModel, inst: Instrument, modifier: Modi
                 CircularProgressIndicator(Modifier.align(Alignment.TopEnd).padding(8.dp).size(20.dp), color = C.accent, strokeWidth = 2.dp)
             }
         }
-        Row(Modifier.padding(top = 6.dp)) {
-            Muted("Fuente: ${vm.chartSource} · Pellizca para zoom, desliza para moverte, toca una vela para ver sus datos.", size = 11)
-        }
+        Text(
+            "Fuente: ${vm.chartSource} · Pellizca para zoom · Toca una vela para ver sus datos",
+            color = C.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 }
 

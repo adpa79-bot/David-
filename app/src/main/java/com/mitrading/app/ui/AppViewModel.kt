@@ -76,6 +76,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var showMa by mutableStateOf(true)
     var showSr by mutableStateOf(true)
     var osc by mutableStateOf(Osc.RSI)
+    var chartFull by mutableStateOf(false)
     private var chartJob: Job? = null
 
     // ---------- Detalle ----------
